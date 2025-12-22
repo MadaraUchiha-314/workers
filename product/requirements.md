@@ -29,20 +29,6 @@ Notes:
 - All prompts are stored in the `prompts/` folder in markdown format
     - system prompt should be in `system.md`
 
-### Agent Interface
-
-```py
-class Agent(ABC):
-    @abstractmethod
-    async def graph(self) -> CompiledStateGraph:
-        raise NotImplementedError()
-    
-    @absrtractmethod
-    async def invoke(self) -> Task | Message:
-        raise NotImplementedError()
-```
-
-
 ## Tech Stack
 
 - Python
