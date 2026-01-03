@@ -24,7 +24,7 @@ repos:
         additional_dependencies:
           - pydantic>=2.9.0
           - types-requests
-        args: [--ignore-missing-imports]
+        args: [--ignore-missing-imports, --check-untyped-defs]
 
   # pytest - Run tests
   - repo: local

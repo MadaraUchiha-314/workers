@@ -74,3 +74,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+filterwarnings = [
+    # Ignore deprecation warning from a2a-sdk (third-party library)
+    "ignore:.*HTTP_413_REQUEST_ENTITY_TOO_LARGE.*:DeprecationWarning",
+]
