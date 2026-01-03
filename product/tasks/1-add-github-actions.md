@@ -1,0 +1,11 @@
+- Add github actions to build the project
+    - linting check
+        - use whatever is currently used in the pre-commit hooks
+    - build
+        - build a podman image for the service workers/service/run.py
+            - the podman container should run the service as an entry point
+        -
+    - test
+        - unit tests
+    - Publish to github container registry the podman image created
+    - Publish to pypi the entire library workers/

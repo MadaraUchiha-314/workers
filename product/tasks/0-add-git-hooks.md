@@ -1,0 +1,6 @@
+- Add pre-commit git hooks for:
+    - linting
+        - ruff
+    - isort
+    - mypy type validation
+    - pytest

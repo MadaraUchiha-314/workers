@@ -1,0 +1,53 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.py[cod]
+*$py.class
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Virtual environments
+.venv
+venv
+env
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+.cursor
+
+# Build artifacts
+dist
+build
+*.egg-info
+.eggs
+
+# Testing
+tests
+.coverage
+htmlcov
+.tox
+.nox
+
+# Documentation
+docs
+*.md
+!README.md
+
+# Project management
+product
+
+# Pre-commit
+.pre-commit-config.yaml
+
+# Other
+.env
+.env.*
+*.log
+

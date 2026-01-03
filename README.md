@@ -1,2 +1,7 @@
-# workers
-An agent which manages it's own state and memories and does work
+# Workers Agent
+
+A ReACT-style AI agent with state management, A2A protocol support, and MCP tools.
+
+## License
+
+MIT
