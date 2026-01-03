@@ -16,7 +16,7 @@ repos:
       - id: isort
         args: ["--profile", "black"]
 
-  # mypy - Type checking
+  # mypy - Type checking (config in pyproject.toml)
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.13.0
     hooks:
@@ -24,7 +24,6 @@ repos:
         additional_dependencies:
           - pydantic>=2.9.0
           - types-requests
-        args: [--ignore-missing-imports, --check-untyped-defs]
 
   # pytest - Run tests
   - repo: local

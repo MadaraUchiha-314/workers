@@ -68,6 +68,7 @@ warn_return_any = true
 warn_unused_ignores = true
 ignore_missing_imports = true
 strict_optional = true
+check_untyped_defs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
