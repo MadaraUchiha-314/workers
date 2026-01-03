@@ -8,7 +8,7 @@ WORKDIR /app
 RUN pip install --no-cache-dir poetry>=1.8.0
 
 # Copy dependency files
-COPY pyproject.toml poetry.lock ./
+COPY pyproject.toml poetry.lock README.md ./
 
 # Configure poetry to not create virtual environment
 RUN poetry config virtualenvs.create false
