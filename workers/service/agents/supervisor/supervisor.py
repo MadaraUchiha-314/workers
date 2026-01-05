@@ -4,14 +4,13 @@ from typing import Annotated, Any
 
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill, TransportProtocol
 from a2a.utils.message import new_agent_text_message
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
-from pydantic import SecretStr
-from typing_extensions import TypedDict
+from pydantic import BaseModel, ConfigDict, SecretStr
 
 from workers.framework.agent.agent import Agent, Message, RequestContext
 
@@ -50,8 +49,12 @@ def calculate(expression: str) -> str:
 
 
 # State definition for the graph
-class AgentState(TypedDict):
-    messages: Annotated[list, add_messages]
+class AgentState(BaseModel):
+    """Pydantic model for the agent state."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    messages: Annotated[list[AnyMessage], add_messages] = []
 
 
 class Supervisor(Agent):
@@ -112,9 +115,9 @@ class Supervisor(Agent):
         system_prompt = self._get_system_prompt()
 
         # Define the plan node
-        def plan(state: AgentState) -> AgentState:
+        def plan(state: AgentState) -> dict[str, list]:
             """Plan and reflect node - makes LLM call."""
-            messages = state["messages"]
+            messages = list(state.messages)
 
             # Prepend system prompt if not already present
             if not messages or not isinstance(messages[0], SystemMessage):
@@ -127,7 +130,7 @@ class Supervisor(Agent):
         # Define the condition to check for tool calls
         def should_continue(state: AgentState) -> str:
             """Determine whether to continue to tools or end."""
-            messages = state["messages"]
+            messages = state.messages
             last_message = messages[-1]
 
             # Check if the last message is an AIMessage with tool_calls
