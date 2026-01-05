@@ -6,7 +6,7 @@ import pytest
 from a2a.server.agent_execution.context import RequestContext
 from a2a.types import Message, TransportProtocol
 
-from workers.service.agents.supervisor import Supervisor
+from workers.service.agents.supervisor.supervisor import Supervisor
 
 
 class TestSupervisorInitialization:
@@ -124,12 +124,13 @@ class TestSupervisorAinvoke:
 
     @pytest.mark.asyncio
     async def test_ainvoke_returns_message(self) -> None:
-        """Test that ainvoke returns a Message."""
+        """Test that ainvoke returns a Message when no user input is provided."""
         supervisor = Supervisor(rpc_url="/test")
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "test-context"
         context.task_id = "test-task"
+        context.get_user_input.return_value = None
 
         result = await supervisor.ainvoke(context)
 
@@ -137,12 +138,13 @@ class TestSupervisorAinvoke:
 
     @pytest.mark.asyncio
     async def test_ainvoke_returns_greeting_message(self) -> None:
-        """Test that ainvoke returns a greeting message."""
+        """Test that ainvoke returns a greeting message when no user input."""
         supervisor = Supervisor(rpc_url="/test")
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "test-context"
         context.task_id = "test-task"
+        context.get_user_input.return_value = None
 
         result = await supervisor.ainvoke(context)
 
@@ -160,6 +162,7 @@ class TestSupervisorAinvoke:
         context = MagicMock(spec=RequestContext)
         context.context_id = "my-context-123"
         context.task_id = "my-task-456"
+        context.get_user_input.return_value = None
 
         result = await supervisor.ainvoke(context)
 
@@ -173,6 +176,7 @@ class TestSupervisorAinvoke:
         context = MagicMock(spec=RequestContext)
         context.context_id = "my-context-123"
         context.task_id = "my-task-456"
+        context.get_user_input.return_value = None
 
         result = await supervisor.ainvoke(context)
 
@@ -184,12 +188,13 @@ class TestSupervisorAstream:
 
     @pytest.mark.asyncio
     async def test_astream_yields_messages(self) -> None:
-        """Test that astream yields messages."""
+        """Test that astream yields messages when no user input is provided."""
         supervisor = Supervisor(rpc_url="/test")
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "test-context"
         context.task_id = "test-task"
+        context.get_user_input.return_value = None
 
         messages = []
         async for message in supervisor.astream(context):
@@ -200,12 +205,13 @@ class TestSupervisorAstream:
 
     @pytest.mark.asyncio
     async def test_astream_yields_greeting_message(self) -> None:
-        """Test that astream yields a greeting message."""
+        """Test that astream yields a greeting message when no user input."""
         supervisor = Supervisor(rpc_url="/test")
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "test-context"
         context.task_id = "test-task"
+        context.get_user_input.return_value = None
 
         messages = []
         async for message in supervisor.astream(context):
@@ -224,6 +230,7 @@ class TestSupervisorAstream:
         context = MagicMock(spec=RequestContext)
         context.context_id = "stream-context-123"
         context.task_id = "stream-task-456"
+        context.get_user_input.return_value = None
 
         messages = []
         async for message in supervisor.astream(context):
@@ -240,6 +247,7 @@ class TestSupervisorAstream:
         context = MagicMock(spec=RequestContext)
         context.context_id = "stream-context-123"
         context.task_id = "stream-task-456"
+        context.get_user_input.return_value = None
 
         messages = []
         async for message in supervisor.astream(context):
