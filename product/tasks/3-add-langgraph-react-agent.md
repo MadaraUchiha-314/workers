@@ -19,3 +19,4 @@ Updates:
 - Use gpt-oss:20b running locally through ollama at http://localhost:11434/v1 for LLM integration
 - Instead of using TypedDict for AgentState, use pydantic model
 - messages in AgentState is list[AnyMessage]
+- Raise an error if the graph execution fails instead of returning a random string

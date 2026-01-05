@@ -166,7 +166,7 @@ class Supervisor(Agent):
             if isinstance(message, AIMessage) and message.content:
                 return str(message.content)
 
-        return "I couldn't generate a response."
+        raise RuntimeError("Graph execution failed: no valid AI response generated")
 
     async def ainvoke(self, context: RequestContext) -> Message:
         # Extract user input from context
