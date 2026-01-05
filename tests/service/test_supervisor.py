@@ -5,8 +5,13 @@ from unittest.mock import MagicMock
 import pytest
 from a2a.server.agent_execution.context import RequestContext
 from a2a.types import Message, TransportProtocol
+from langgraph.types import Command
 
-from workers.service.agents.supervisor.supervisor import Supervisor
+from workers.service.agents.supervisor.supervisor import (
+    Supervisor,
+    jsonpatch_update,
+    jsonpath_query,
+)
 
 
 class TestSupervisorInitialization:
@@ -284,6 +289,248 @@ class TestSupervisorAcancel:
         # acancel is a void function (returns None implicitly)
         # We just verify it completes without error
         await supervisor.acancel(context)
+
+
+class TestJsonpathQuery:
+    """Tests for jsonpath_query tool."""
+
+    def test_query_simple_field(self) -> None:
+        """Test querying a simple field from data."""
+        state = {"data": {"name": "John", "age": 30}}
+
+        result = jsonpath_query.invoke({"path": "$.name", "state": state})
+
+        assert result == "John"
+
+    def test_query_nested_field(self) -> None:
+        """Test querying a nested field from data."""
+        state = {"data": {"user": {"profile": {"email": "john@example.com"}}}}
+
+        result = jsonpath_query.invoke({"path": "$.user.profile.email", "state": state})
+
+        assert result == "john@example.com"
+
+    def test_query_array_element(self) -> None:
+        """Test querying an array element from data."""
+        state = {"data": {"items": ["apple", "banana", "cherry"]}}
+
+        result = jsonpath_query.invoke({"path": "$.items[0]", "state": state})
+
+        assert result == "apple"
+
+    def test_query_all_array_elements(self) -> None:
+        """Test querying all array elements from data."""
+        state = {"data": {"items": ["a", "b", "c"]}}
+
+        result = jsonpath_query.invoke({"path": "$.items[*]", "state": state})
+
+        assert result == "['a', 'b', 'c']"
+
+    def test_query_recursive_descent(self) -> None:
+        """Test querying using recursive descent."""
+        state = {"data": {"users": [{"id": 1}, {"id": 2}], "nested": {"id": 3}}}
+
+        result = jsonpath_query.invoke({"path": "$..id", "state": state})
+
+        assert "1" in result
+        assert "2" in result
+        assert "3" in result
+
+    def test_query_no_match(self) -> None:
+        """Test querying when no match is found."""
+        state = {"data": {"name": "John"}}
+
+        result = jsonpath_query.invoke({"path": "$.nonexistent", "state": state})
+
+        assert "No matches found" in result
+
+    def test_query_empty_data(self) -> None:
+        """Test querying when data is empty."""
+        state: dict[str, dict] = {"data": {}}
+
+        result = jsonpath_query.invoke({"path": "$.name", "state": state})
+
+        assert "No matches found" in result
+
+    def test_query_missing_data_key(self) -> None:
+        """Test querying when data key is missing from state."""
+        state: dict = {}
+
+        result = jsonpath_query.invoke({"path": "$.name", "state": state})
+
+        assert "No matches found" in result
+
+    def test_query_invalid_jsonpath(self) -> None:
+        """Test querying with an invalid JSONPath expression."""
+        state = {"data": {"name": "John"}}
+
+        result = jsonpath_query.invoke({"path": "invalid[[jsonpath", "state": state})
+
+        assert "Error" in result
+
+
+class TestJsonpatchUpdate:
+    """Tests for jsonpatch_update tool."""
+
+    def test_add_field(self) -> None:
+        """Test adding a new field to data."""
+        state: dict[str, dict] = {"data": {}}
+
+        result = jsonpatch_update.invoke(
+            {
+                "patch": '[{"op": "add", "path": "/name", "value": "John"}]',
+                "state": state,
+            }
+        )
+
+        assert isinstance(result, Command)
+        assert result.update is not None
+        assert result.update["data"] == {"name": "John"}
+
+    def test_replace_field(self) -> None:
+        """Test replacing an existing field in data."""
+        state = {"data": {"name": "John"}}
+
+        result = jsonpatch_update.invoke(
+            {
+                "patch": '[{"op": "replace", "path": "/name", "value": "Jane"}]',
+                "state": state,
+            }
+        )
+
+        assert isinstance(result, Command)
+        assert result.update is not None
+        assert result.update["data"]["name"] == "Jane"
+
+    def test_remove_field(self) -> None:
+        """Test removing a field from data."""
+        state = {"data": {"name": "John", "age": 30}}
+
+        result = jsonpatch_update.invoke(
+            {"patch": '[{"op": "remove", "path": "/age"}]', "state": state}
+        )
+
+        assert isinstance(result, Command)
+        assert result.update is not None
+        assert "age" not in result.update["data"]
+        assert result.update["data"]["name"] == "John"
+
+    def test_add_nested_field(self) -> None:
+        """Test adding a nested field to data."""
+        state: dict[str, dict] = {"data": {"user": {}}}
+
+        result = jsonpatch_update.invoke(
+            {
+                "patch": '[{"op": "add", "path": "/user/email", "value": "test@example.com"}]',
+                "state": state,
+            }
+        )
+
+        assert isinstance(result, Command)
+        assert result.update is not None
+        assert result.update["data"]["user"]["email"] == "test@example.com"
+
+    def test_add_to_array(self) -> None:
+        """Test appending to an array."""
+        state = {"data": {"items": ["a", "b"]}}
+
+        result = jsonpatch_update.invoke(
+            {
+                "patch": '[{"op": "add", "path": "/items/-", "value": "c"}]',
+                "state": state,
+            }
+        )
+
+        assert isinstance(result, Command)
+        assert result.update is not None
+        assert result.update["data"]["items"] == ["a", "b", "c"]
+
+    def test_multiple_operations(self) -> None:
+        """Test applying multiple patch operations."""
+        state = {"data": {"a": 1}}
+
+        result = jsonpatch_update.invoke(
+            {
+                "patch": '[{"op": "add", "path": "/b", "value": 2}, {"op": "add", "path": "/c", "value": 3}]',
+                "state": state,
+            }
+        )
+
+        assert isinstance(result, Command)
+        assert result.update is not None
+        assert result.update["data"]["a"] == 1
+        assert result.update["data"]["b"] == 2
+        assert result.update["data"]["c"] == 3
+
+    def test_move_field(self) -> None:
+        """Test moving a field."""
+        state = {"data": {"old_name": "value"}}
+
+        result = jsonpatch_update.invoke(
+            {
+                "patch": '[{"op": "move", "from": "/old_name", "path": "/new_name"}]',
+                "state": state,
+            }
+        )
+
+        assert isinstance(result, Command)
+        assert result.update is not None
+        assert "old_name" not in result.update["data"]
+        assert result.update["data"]["new_name"] == "value"
+
+    def test_copy_field(self) -> None:
+        """Test copying a field."""
+        state = {"data": {"source": "value"}}
+
+        result = jsonpatch_update.invoke(
+            {
+                "patch": '[{"op": "copy", "from": "/source", "path": "/target"}]',
+                "state": state,
+            }
+        )
+
+        assert isinstance(result, Command)
+        assert result.update is not None
+        assert result.update["data"]["source"] == "value"
+        assert result.update["data"]["target"] == "value"
+
+    def test_invalid_json_patch(self) -> None:
+        """Test with invalid JSON in patch document."""
+        state: dict[str, dict] = {"data": {}}
+
+        with pytest.raises(ValueError) as exc_info:
+            jsonpatch_update.invoke({"patch": "not valid json", "state": state})
+
+        assert "Invalid JSON" in str(exc_info.value)
+
+    def test_invalid_patch_operation(self) -> None:
+        """Test with invalid patch operation."""
+        state: dict[str, dict] = {"data": {}}
+
+        with pytest.raises(ValueError) as exc_info:
+            jsonpatch_update.invoke(
+                {
+                    "patch": '[{"op": "remove", "path": "/nonexistent"}]',
+                    "state": state,
+                }
+            )
+
+        assert "JSON Patch error" in str(exc_info.value)
+
+    def test_empty_data_state(self) -> None:
+        """Test applying patch when data key is missing from state."""
+        state: dict = {}
+
+        result = jsonpatch_update.invoke(
+            {
+                "patch": '[{"op": "add", "path": "/name", "value": "John"}]',
+                "state": state,
+            }
+        )
+
+        assert isinstance(result, Command)
+        assert result.update is not None
+        assert result.update["data"]["name"] == "John"
 
 
 if __name__ == "__main__":

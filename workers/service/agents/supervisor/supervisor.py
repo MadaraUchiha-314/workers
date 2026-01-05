@@ -2,14 +2,18 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Annotated, Any
 
+import jsonpatch
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill, TransportProtocol
 from a2a.utils.message import new_agent_text_message
+from jsonpath_ng import parse as jsonpath_parse
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
+from langgraph.prebuilt.tool_node import InjectedState
+from langgraph.types import Command
 from pydantic import BaseModel, ConfigDict, SecretStr
 
 from workers.framework.agent.agent import Agent, Message, RequestContext
@@ -48,6 +52,88 @@ def calculate(expression: str) -> str:
         return f"Error: {e}"
 
 
+@tool
+def jsonpath_query(path: str, state: Annotated[dict[str, Any], InjectedState]) -> str:
+    """Query the agent's data store using JSONPath expressions.
+
+    Use this tool to retrieve specific values from the agent's structured data.
+    JSONPath is a query language for JSON, similar to XPath for XML.
+
+    Args:
+        path: A JSONPath expression to query the data (e.g., "$.users[0].name",
+              "$..price", "$.store.book[?@.price<10]")
+
+    Examples:
+        - "$.name" - Get the 'name' field from root
+        - "$.users[*].email" - Get all user emails
+        - "$.items[0]" - Get the first item
+        - "$..id" - Get all 'id' fields recursively
+    """
+    try:
+        data = state.get("data", {})
+        jsonpath_expr = jsonpath_parse(path)
+        matches = jsonpath_expr.find(data)
+
+        if not matches:
+            return "No matches found for the given JSONPath expression."
+
+        # Extract values from matches
+        results = [match.value for match in matches]
+
+        # Return single value if only one match, otherwise return list
+        if len(results) == 1:
+            return str(results[0])
+        return str(results)
+    except Exception as e:
+        return f"Error querying data: {e}"
+
+
+@tool
+def jsonpatch_update(
+    patch: str, state: Annotated[dict[str, Any], InjectedState]
+) -> Command:
+    """Modify the agent's data store using JSON Patch operations.
+
+    Use this tool to add, remove, replace, move, copy, or test values in the
+    agent's structured data. The patch must be a valid JSON Patch document
+    (RFC 6902).
+
+    Args:
+        patch: A JSON Patch document as a JSON string. Each operation has:
+               - "op": The operation ("add", "remove", "replace", "move", "copy", "test")
+               - "path": JSON Pointer to the target location
+               - "value": The value (required for add, replace, test)
+               - "from": Source path (required for move, copy)
+
+    Examples:
+        - '[{"op": "add", "path": "/name", "value": "John"}]' - Add a name field
+        - '[{"op": "replace", "path": "/age", "value": 30}]' - Update age
+        - '[{"op": "remove", "path": "/temp"}]' - Remove temp field
+        - '[{"op": "add", "path": "/items/-", "value": "new item"}]' - Append to array
+    """
+    import json
+
+    try:
+        # Parse the patch document
+        patch_doc = json.loads(patch)
+
+        # Get current data from state
+        current_data = state.get("data", {})
+
+        # Apply the patch
+        new_data = jsonpatch.apply_patch(current_data, patch_doc)
+
+        # Return a Command to update the state
+        return Command(update={"data": new_data})
+    except json.JSONDecodeError as e:
+        # Return command with unchanged data and error message will be in tool output
+        raise ValueError(f"Invalid JSON in patch document: {e}") from e
+    except jsonpatch.JsonPatchException as e:
+        raise ValueError(f"JSON Patch error: {e}") from e
+    except Exception as e:
+        raise ValueError(f"Error applying patch: {e}") from e
+
+
 # State definition for the graph
 class AgentState(BaseModel):
     """Pydantic model for the agent state."""
@@ -55,6 +141,7 @@ class AgentState(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     messages: Annotated[list[AnyMessage], add_messages] = []
+    data: dict[str, Any] = {}
 
 
 class Supervisor(Agent):
@@ -85,7 +172,7 @@ class Supervisor(Agent):
         super().__init__(id="supervisor", agent_card=self.agent_card)
 
         # Initialize the LangGraph agent configuration (lazy graph building)
-        self._tools = [get_current_time, calculate]
+        self._tools = [get_current_time, calculate, jsonpath_query, jsonpatch_update]
         self._system_prompt: str | None = None
         self._graph: Any | None = None
 
