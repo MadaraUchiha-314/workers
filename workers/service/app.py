@@ -8,7 +8,7 @@ from fastapi import FastAPI
 
 from workers.framework.a2a.executor import A2AExecutor
 from workers.framework.agent.agent import Agent
-from workers.service.agents.supervisor import Supervisor
+from workers.service.agents.supervisor.supervisor import Supervisor
 
 logger = logging.getLogger(__name__)
 

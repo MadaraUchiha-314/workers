@@ -1,0 +1,20 @@
+- Implement the agent in workers/service/agents/supervisor.py using LangGraph
+- The graph structure looks something like this
+- Nodes:
+    - Plan and reflect
+        - In the plan node do an LLM call using ChatOpenAI from LangGraph
+            - docs: https://docs.langchain.com/oss/python/integrations/chat/openai
+        - Create and Read the prompts from a markdown file. Create the markdown file in workers/service/agents/supervisor/prompts
+        - Extract the user's message from the context: RequestContext
+            - Use `get_user_input` of the RequestContext object
+        - Once the graph is finished execution return the final message
+    - ToolNode
+- Edges
+    - START -> Plan
+    - Conditional Edge from Plan -> Tool if the last AIMessage contains a non-empty tool_calls attribute
+    - Else from Plan -> END
+    - Tool -> Plan
+
+Updates:
+- Use gpt-oss:20b running locally through ollama at http://localhost:11434/v1 for LLM integration
+- 

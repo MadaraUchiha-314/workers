@@ -5,11 +5,23 @@ matching the examples provided in the task specification.
 """
 
 import uuid
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
 from workers.service.app import create_app
+
+
+@pytest.fixture(autouse=True)
+def mock_agent_run():
+    """Mock the _run_agent method to avoid needing OpenAI API key in tests."""
+    with patch(
+        "workers.service.agents.supervisor.supervisor.Supervisor._run_agent",
+        new_callable=AsyncMock,
+    ) as mock:
+        mock.return_value = "Hello! I'm a helpful AI assistant."
+        yield mock
 
 
 class TestMessageSendEndToEnd:
