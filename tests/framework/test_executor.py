@@ -25,7 +25,7 @@ from a2a.types import (
 )
 
 from workers.framework.a2a.executor import A2AExecutor
-from workers.framework.agent.agent import Agent
+from workers.framework.agent.agent import Agent, TaskResponse
 
 
 class MockAgent(Agent):
@@ -55,11 +55,11 @@ class MockAgent(Agent):
             preferred_transport=TransportProtocol.jsonrpc,
         )
         super().__init__(id="mock-agent", agent_card=agent_card)
-        self._invoke_response: Message | Task | None = None
+        self._invoke_response: Message | TaskResponse | None = None
         self._stream_events: list = []
         self._should_raise: Exception | None = None
 
-    def set_invoke_response(self, response: Message | Task) -> None:
+    def set_invoke_response(self, response: Message | TaskResponse) -> None:
         self._invoke_response = response
 
     def set_stream_events(self, events: list) -> None:
@@ -68,7 +68,7 @@ class MockAgent(Agent):
     def set_should_raise(self, error: Exception) -> None:
         self._should_raise = error
 
-    async def ainvoke(self, context: RequestContext) -> Message | Task:
+    async def ainvoke(self, context: RequestContext) -> Message | TaskResponse:
         if self._should_raise:
             raise self._should_raise
         if self._invoke_response is None:
@@ -78,7 +78,7 @@ class MockAgent(Agent):
     async def astream(
         self, context: RequestContext
     ) -> AsyncGenerator[
-        Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, None
+        Message | TaskResponse | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, None
     ]:
         if self._should_raise:
             raise self._should_raise
@@ -109,13 +109,25 @@ def create_mock_task(
     context_id: str = "test-context",
     state: TaskState = TaskState.completed,
 ) -> Task:
-    """Create a mock Task for testing."""
+    """Create a mock Task for testing (used by executor for task creation)."""
     message = create_mock_message(context_id=context_id, task_id=task_id)
     return Task(
         id=task_id,
         context_id=context_id,
         status=TaskStatus(state=state),
         history=[message],
+    )
+
+
+def create_mock_task_response(
+    state: TaskState = TaskState.completed,
+    message: Message | None = None,
+    artifacts: list[Artifact] | None = None,
+) -> TaskResponse:
+    """Create a mock TaskResponse for testing."""
+    return TaskResponse(
+        status=TaskStatus(state=state, message=message),
+        artifacts=artifacts,
     )
 
 
@@ -192,13 +204,13 @@ class TestA2AExecutorBlockingMode:
 
     @pytest.mark.asyncio
     async def test_execute_with_completed_task_response(self) -> None:
-        """Test that execute handles a completed Task response correctly."""
+        """Test that execute handles a completed TaskResponse correctly."""
         agent = MockAgent()
         executor = A2AExecutor(agent=agent)
 
-        # Setup agent to return a completed task
-        response_task = create_mock_task(state=TaskState.completed)
-        agent.set_invoke_response(response_task)
+        # Setup agent to return a completed task response
+        response = create_mock_task_response(state=TaskState.completed)
+        agent.set_invoke_response(response)
 
         context = create_mock_context(blocking=True)
         event_queue = MagicMock(spec=EventQueue)
@@ -214,13 +226,13 @@ class TestA2AExecutorBlockingMode:
 
     @pytest.mark.asyncio
     async def test_execute_with_failed_task_response(self) -> None:
-        """Test that execute handles a failed Task response correctly."""
+        """Test that execute handles a failed TaskResponse correctly."""
         agent = MockAgent()
         executor = A2AExecutor(agent=agent)
 
-        # Setup agent to return a failed task
-        response_task = create_mock_task(state=TaskState.failed)
-        agent.set_invoke_response(response_task)
+        # Setup agent to return a failed task response
+        response = create_mock_task_response(state=TaskState.failed)
+        agent.set_invoke_response(response)
 
         context = create_mock_context(blocking=True)
         event_queue = MagicMock(spec=EventQueue)
@@ -236,13 +248,13 @@ class TestA2AExecutorBlockingMode:
 
     @pytest.mark.asyncio
     async def test_execute_with_canceled_task_response(self) -> None:
-        """Test that execute handles a canceled Task response correctly."""
+        """Test that execute handles a canceled TaskResponse correctly."""
         agent = MockAgent()
         executor = A2AExecutor(agent=agent)
 
-        # Setup agent to return a canceled task
-        response_task = create_mock_task(state=TaskState.canceled)
-        agent.set_invoke_response(response_task)
+        # Setup agent to return a canceled task response
+        response = create_mock_task_response(state=TaskState.canceled)
+        agent.set_invoke_response(response)
 
         context = create_mock_context(blocking=True)
         event_queue = MagicMock(spec=EventQueue)
@@ -258,13 +270,13 @@ class TestA2AExecutorBlockingMode:
 
     @pytest.mark.asyncio
     async def test_execute_with_rejected_task_response(self) -> None:
-        """Test that execute handles a rejected Task response correctly."""
+        """Test that execute handles a rejected TaskResponse correctly."""
         agent = MockAgent()
         executor = A2AExecutor(agent=agent)
 
-        # Setup agent to return a rejected task
-        response_task = create_mock_task(state=TaskState.rejected)
-        agent.set_invoke_response(response_task)
+        # Setup agent to return a rejected task response
+        response = create_mock_task_response(state=TaskState.rejected)
+        agent.set_invoke_response(response)
 
         context = create_mock_context(blocking=True)
         event_queue = MagicMock(spec=EventQueue)
@@ -327,14 +339,14 @@ class TestA2AExecutorStreamingMode:
         assert event_queue.enqueue_event.called
 
     @pytest.mark.asyncio
-    async def test_execute_streams_task_events(self) -> None:
-        """Test that execute streams Task events correctly."""
+    async def test_execute_streams_task_response_events(self) -> None:
+        """Test that execute streams TaskResponse events correctly."""
         agent = MockAgent()
         executor = A2AExecutor(agent=agent)
 
-        # Setup agent to stream tasks
-        stream_task = create_mock_task(state=TaskState.completed)
-        agent.set_stream_events([stream_task])
+        # Setup agent to stream task responses
+        stream_response = create_mock_task_response(state=TaskState.completed)
+        agent.set_stream_events([stream_response])
 
         context = create_mock_context(blocking=False)
         event_queue = MagicMock(spec=EventQueue)
