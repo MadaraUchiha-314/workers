@@ -154,6 +154,7 @@ class TestSupervisorAinvoke:
         result = await supervisor.ainvoke(context)
 
         # Check that the message contains expected text
+        assert isinstance(result, Message)
         assert len(result.parts) > 0
         first_part = result.parts[0]
         # Part can be a union type, check if it has text attribute
@@ -171,6 +172,7 @@ class TestSupervisorAinvoke:
 
         result = await supervisor.ainvoke(context)
 
+        assert isinstance(result, Message)
         assert result.context_id == "my-context-123"
 
     @pytest.mark.asyncio
@@ -185,6 +187,7 @@ class TestSupervisorAinvoke:
 
         result = await supervisor.ainvoke(context)
 
+        assert isinstance(result, Message)
         assert result.task_id == "my-task-456"
 
 
@@ -225,6 +228,7 @@ class TestSupervisorAstream:
         # Check that at least one message contains greeting text
         assert len(messages) > 0
         first_message = messages[0]
+        assert isinstance(first_message, Message)
         assert len(first_message.parts) > 0
 
     @pytest.mark.asyncio
@@ -242,7 +246,10 @@ class TestSupervisorAstream:
             messages.append(message)
 
         assert len(messages) > 0
-        assert all(msg.context_id == "stream-context-123" for msg in messages)
+        assert all(
+            isinstance(msg, Message) and msg.context_id == "stream-context-123"
+            for msg in messages
+        )
 
     @pytest.mark.asyncio
     async def test_astream_uses_task_id(self) -> None:
@@ -259,7 +266,10 @@ class TestSupervisorAstream:
             messages.append(message)
 
         assert len(messages) > 0
-        assert all(msg.task_id == "stream-task-456" for msg in messages)
+        assert all(
+            isinstance(msg, Message) and msg.task_id == "stream-task-456"
+            for msg in messages
+        )
 
 
 class TestSupervisorAcancel:

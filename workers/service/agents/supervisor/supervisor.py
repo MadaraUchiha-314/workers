@@ -330,6 +330,7 @@ class Supervisor(Agent):
         config = {"configurable": {"thread_id": thread_id}}
 
         # Determine input based on whether this is a new message or resumption
+        graph_input: Command[Any] | dict[str, list[HumanMessage]]
         if isinstance(user_input, Command):
             graph_input = user_input
         else:
