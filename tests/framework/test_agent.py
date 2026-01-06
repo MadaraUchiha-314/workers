@@ -10,13 +10,12 @@ from a2a.types import (
     AgentCard,
     AgentSkill,
     Message,
-    Task,
     TaskArtifactUpdateEvent,
     TaskStatusUpdateEvent,
     TransportProtocol,
 )
 
-from workers.framework.agent.agent import Agent
+from workers.framework.agent.agent import Agent, TaskResponse
 
 
 class ConcreteAgent(Agent):
@@ -24,11 +23,11 @@ class ConcreteAgent(Agent):
 
     def __init__(self, id: str, agent_card: AgentCard):
         super().__init__(id=id, agent_card=agent_card)
-        self._invoke_response: Message | Task | None = None
+        self._invoke_response: Message | TaskResponse | None = None
         self._stream_events: list = []
         self._cancel_called = False
 
-    def set_invoke_response(self, response: Message | Task) -> None:
+    def set_invoke_response(self, response: Message | TaskResponse) -> None:
         """Set the response to return from ainvoke."""
         self._invoke_response = response
 
@@ -36,7 +35,7 @@ class ConcreteAgent(Agent):
         """Set the events to yield from astream."""
         self._stream_events = events
 
-    async def ainvoke(self, context: RequestContext) -> Message | Task:
+    async def ainvoke(self, context: RequestContext) -> Message | TaskResponse:
         """Return the configured response."""
         if self._invoke_response is None:
             raise ValueError("No invoke response configured")
@@ -45,7 +44,7 @@ class ConcreteAgent(Agent):
     async def astream(
         self, context: RequestContext
     ) -> AsyncGenerator[
-        Message | Task | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, None
+        Message | TaskResponse | TaskStatusUpdateEvent | TaskArtifactUpdateEvent, None
     ]:
         """Yield the configured events."""
         for event in self._stream_events:
@@ -136,20 +135,20 @@ class TestAgentAbstractMethods:
         assert result is mock_message
 
     @pytest.mark.asyncio
-    async def test_ainvoke_returns_task(self) -> None:
-        """Test that ainvoke can return a Task."""
+    async def test_ainvoke_returns_task_response(self) -> None:
+        """Test that ainvoke can return a TaskResponse."""
         agent_card = create_test_agent_card()
         agent = ConcreteAgent(id="test-agent", agent_card=agent_card)
 
-        # Create a mock task
-        mock_task = MagicMock(spec=Task)
-        agent.set_invoke_response(mock_task)
+        # Create a mock task response
+        mock_task_response = MagicMock(spec=TaskResponse)
+        agent.set_invoke_response(mock_task_response)
 
         mock_context = MagicMock(spec=RequestContext)
 
         result = await agent.ainvoke(mock_context)
 
-        assert result is mock_task
+        assert result is mock_task_response
 
     @pytest.mark.asyncio
     async def test_ainvoke_raises_when_no_response_configured(self) -> None:
@@ -170,8 +169,8 @@ class TestAgentAbstractMethods:
 
         # Create mock events
         mock_message = MagicMock(spec=Message)
-        mock_task = MagicMock(spec=Task)
-        agent.set_stream_events([mock_message, mock_task])
+        mock_task_response = MagicMock(spec=TaskResponse)
+        agent.set_stream_events([mock_message, mock_task_response])
 
         mock_context = MagicMock(spec=RequestContext)
 
@@ -181,7 +180,7 @@ class TestAgentAbstractMethods:
 
         assert len(events) == 2
         assert events[0] is mock_message
-        assert events[1] is mock_task
+        assert events[1] is mock_task_response
 
     @pytest.mark.asyncio
     async def test_astream_yields_empty_when_no_events(self) -> None:

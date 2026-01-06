@@ -1,0 +1,2 @@
+- Inject the current state in the prompt in the appropriate section
+- Replace the variable $agent_state with the json dumps of the agent state

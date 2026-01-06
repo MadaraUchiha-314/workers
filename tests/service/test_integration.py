@@ -8,6 +8,7 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from a2a.utils.message import new_agent_text_message
 from fastapi.testclient import TestClient
 
 from workers.service.app import create_app
@@ -20,7 +21,9 @@ def mock_agent_run():
         "workers.service.agents.supervisor.supervisor.Supervisor._run_agent",
         new_callable=AsyncMock,
     ) as mock:
-        mock.return_value = "Hello! I'm a helpful AI assistant."
+        # Return a Message object instead of string since _run_agent now returns
+        # Message | TaskResponse
+        mock.return_value = new_agent_text_message("Hello! I'm a helpful AI assistant.")
         yield mock
 
 
