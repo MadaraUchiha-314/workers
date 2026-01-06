@@ -1,5 +1,7 @@
+import json
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from string import Template
 from typing import Annotated, Any
 
 import jsonpatch
@@ -52,7 +54,7 @@ def calculate(expression: str) -> str:
         return f"Error: {e}"
 
 
-@tool
+@tool(parse_docstring=True)
 def jsonpath_query(path: str, state: Annotated[dict[str, Any], InjectedState]) -> str:
     """Query the agent's data store using JSONPath expressions.
 
@@ -88,7 +90,7 @@ def jsonpath_query(path: str, state: Annotated[dict[str, Any], InjectedState]) -
         return f"Error querying data: {e}"
 
 
-@tool
+@tool(parse_docstring=True)
 def jsonpatch_update(
     patch: str, state: Annotated[dict[str, Any], InjectedState]
 ) -> Command:
@@ -96,20 +98,14 @@ def jsonpatch_update(
 
     Use this tool to add, remove, replace, move, copy, or test values in the
     agent's structured data. The patch must be a valid JSON Patch document
-    (RFC 6902).
+    (RFC 6902). Each operation in the patch has an "op" field (add, remove,
+    replace, move, copy, test), a "path" field (JSON Pointer to target),
+    and optionally "value" (for add/replace/test) or "from" (for move/copy).
+
+    Example: '[{"op": "add", "path": "/name", "value": "John"}]'
 
     Args:
-        patch: A JSON Patch document as a JSON string. Each operation has:
-               - "op": The operation ("add", "remove", "replace", "move", "copy", "test")
-               - "path": JSON Pointer to the target location
-               - "value": The value (required for add, replace, test)
-               - "from": Source path (required for move, copy)
-
-    Examples:
-        - '[{"op": "add", "path": "/name", "value": "John"}]' - Add a name field
-        - '[{"op": "replace", "path": "/age", "value": 30}]' - Update age
-        - '[{"op": "remove", "path": "/temp"}]' - Remove temp field
-        - '[{"op": "add", "path": "/items/-", "value": "new item"}]' - Append to array
+        patch: A JSON Patch document as a JSON string array of operations.
     """
     import json
 
@@ -198,18 +194,30 @@ class Supervisor(Agent):
         )
         llm_with_tools = llm.bind_tools(self._tools)
 
-        # Capture system prompt for use in closure
-        system_prompt = self._get_system_prompt()
+        # Capture system prompt template for use in closure
+        system_prompt_template = Template(self._get_system_prompt())
 
         # Define the plan node
         def plan(state: AgentState) -> dict[str, list]:
             """Plan and reflect node - makes LLM call."""
             messages = list(state.messages)
 
+            # Substitute $agent_state with the current state data
+            # Create a minimal state dict with just the data for the prompt
+            state_dict = {"data": state.data}
+            # Serialize using Pydantic's JSON encoder via model_dump
+            state_json = json.dumps(state_dict, indent=2, default=str)
+            system_prompt = system_prompt_template.safe_substitute(
+                agent_state=state_json
+            )
+
+            system_message = SystemMessage(content=system_prompt)
             # Prepend system prompt if not already present
             if not messages or not isinstance(messages[0], SystemMessage):
-                system_message = SystemMessage(content=system_prompt)
                 messages = [system_message, *messages]
+            else:
+                # Update the system message with current state
+                messages = [system_message, *messages[1:]]
 
             response = llm_with_tools.invoke(messages)
             return {"messages": [response]}
