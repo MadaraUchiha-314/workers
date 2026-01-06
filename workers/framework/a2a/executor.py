@@ -59,6 +59,10 @@ class A2AExecutor(AgentExecutor):
                         await task_updater.cancel(response.status.message)
                     elif response.status.state == TaskState.rejected:
                         await task_updater.reject(response.status.message)
+                    elif response.status.state == TaskState.input_required:
+                        await task_updater.update_status(
+                            TaskState.input_required, response.status.message
+                        )
                 elif isinstance(response, Message):
                     await task_updater.complete(response)
             except Exception as e:
@@ -90,6 +94,10 @@ class A2AExecutor(AgentExecutor):
                             await task_updater.cancel(event.status.message)
                         elif event.status.state == TaskState.rejected:
                             await task_updater.reject(event.status.message)
+                        elif event.status.state == TaskState.input_required:
+                            await task_updater.update_status(
+                                TaskState.input_required, event.status.message
+                            )
                     elif isinstance(event, Message):
                         await task_updater.complete(event)
                     elif isinstance(event, TaskStatusUpdateEvent):

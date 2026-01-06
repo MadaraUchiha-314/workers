@@ -1,24 +1,33 @@
 import json
+import uuid
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from string import Template
 from typing import Annotated, Any
 
 import jsonpatch
-from a2a.types import AgentCapabilities, AgentCard, AgentSkill, TransportProtocol
+from a2a.types import (
+    AgentCapabilities,
+    AgentCard,
+    AgentSkill,
+    TaskState,
+    TaskStatus,
+    TransportProtocol,
+)
 from a2a.utils.message import new_agent_text_message
 from jsonpath_ng import parse as jsonpath_parse
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from langgraph.graph import END, START, StateGraph
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langgraph.prebuilt.tool_node import InjectedState
-from langgraph.types import Command
+from langgraph.types import Command, Interrupt, interrupt
 from pydantic import BaseModel, ConfigDict, SecretStr
 
-from workers.framework.agent.agent import Agent, Message, RequestContext
+from workers.framework.agent.agent import Agent, Message, RequestContext, TaskResponse
 
 
 def load_system_prompt() -> str:
@@ -224,14 +233,33 @@ class Supervisor(Agent):
 
         # Define the condition to check for tool calls
         def should_continue(state: AgentState) -> str:
-            """Determine whether to continue to tools or end."""
+            """Determine whether to continue to tools or wait for input."""
             messages = state.messages
             last_message = messages[-1]
 
             # Check if the last message is an AIMessage with tool_calls
             if isinstance(last_message, AIMessage) and last_message.tool_calls:
                 return "tools"
-            return str(END)
+            return "wait_for_further_input"
+
+        # Define the wait_for_further_input node using LangGraph interrupt
+        def wait_for_further_input(state: AgentState) -> dict[str, list]:
+            """Wait for further input from user using interrupt mechanism."""
+            # Get the last AI message to include in the interrupt
+            messages = state.messages
+            last_message = messages[-1] if messages else None
+
+            # Create an AIMessage to pass to interrupt (keeping LangGraph types internal)
+            content = ""
+            if isinstance(last_message, AIMessage) and last_message.content:
+                content = str(last_message.content)
+
+            # Interrupt with an AIMessage as specified in requirements
+            interrupt_message = AIMessage(content=content)
+            user_input = interrupt(interrupt_message)
+
+            # When resumed, add the user input as a HumanMessage
+            return {"messages": [HumanMessage(content=str(user_input))]}
 
         # Build the graph
         graph_builder = StateGraph(AgentState)
@@ -239,31 +267,108 @@ class Supervisor(Agent):
         # Add nodes
         graph_builder.add_node("plan", plan)
         graph_builder.add_node("tools", ToolNode(self._tools))
+        graph_builder.add_node("wait_for_further_input", wait_for_further_input)
 
         # Add edges
         graph_builder.add_edge(START, "plan")
-        graph_builder.add_conditional_edges("plan", should_continue, ["tools", END])
+        graph_builder.add_conditional_edges(
+            "plan", should_continue, ["tools", "wait_for_further_input"]
+        )
         graph_builder.add_edge("tools", "plan")
+        graph_builder.add_edge("wait_for_further_input", "plan")
 
-        return graph_builder.compile()
+        # Compile with checkpointer to support interrupts
+        checkpointer = MemorySaver()
+        return graph_builder.compile(checkpointer=checkpointer)
 
-    async def _run_agent(self, user_input: str) -> str:
-        """Run the agent with user input and return the final response."""
-        initial_state = {"messages": [HumanMessage(content=user_input)]}
+    def _validate_interrupt_state(self, interrupts: tuple[Interrupt, ...]) -> AIMessage:
+        """Validate interrupt state and return the interrupt message.
 
+        Args:
+            interrupts: Tuple of interrupts from the graph state.
+
+        Returns:
+            The AIMessage object from the interrupt.
+
+        Raises:
+            ValueError: If multiple interrupts are present or value is not an AIMessage.
+        """
+        if len(interrupts) > 1:
+            raise ValueError(
+                f"Multiple interrupts detected ({len(interrupts)}). "
+                "Only a single interrupt is allowed."
+            )
+
+        if len(interrupts) == 0:
+            raise ValueError("No interrupts found in state.")
+
+        interrupt_value = interrupts[0].value
+        if not isinstance(interrupt_value, AIMessage):
+            raise ValueError(
+                f"Interrupt value must be an AIMessage object, "
+                f"got {type(interrupt_value).__name__} instead."
+            )
+
+        return interrupt_value
+
+    async def _run_agent(
+        self, user_input: str | Command, thread_id: str
+    ) -> Message | TaskResponse:
+        """Run the agent with user input and return the response.
+
+        Args:
+            user_input: Either a string for new input or a Command to resume.
+            thread_id: The thread ID for maintaining session state.
+
+        Returns:
+            Either a Message (when interrupted) or TaskResponse (completed/interrupted).
+        """
         # Run the graph (lazy initialization)
         graph = self._get_graph()
-        result = await graph.ainvoke(initial_state)
+
+        # Config with thread_id for checkpointing
+        config = {"configurable": {"thread_id": thread_id}}
+
+        # Determine input based on whether this is a new message or resumption
+        if isinstance(user_input, Command):
+            graph_input = user_input
+        else:
+            graph_input = {"messages": [HumanMessage(content=user_input)]}
+
+        # Run the graph
+        result = await graph.ainvoke(graph_input, config)
+
+        # Check for interrupts in the state
+        state = await graph.aget_state(config)
+        if state.tasks and any(task.interrupts for task in state.tasks):
+            # Collect all interrupts from tasks
+            all_interrupts: list[Interrupt] = []
+            for task in state.tasks:
+                all_interrupts.extend(task.interrupts)
+
+            # Validate interrupts (single interrupt, AIMessage type)
+            ai_message = self._validate_interrupt_state(tuple(all_interrupts))
+
+            # Convert AIMessage to A2A Message for the response
+            interrupt_message = new_agent_text_message(str(ai_message.content))
+
+            # Return TaskResponse with input_required status
+            return TaskResponse(
+                status=TaskStatus(
+                    state=TaskState.input_required,
+                    message=interrupt_message,
+                )
+            )
 
         # Extract the final AI message
         messages = result["messages"]
         for message in reversed(messages):
             if isinstance(message, AIMessage) and message.content:
-                return str(message.content)
+                return new_agent_text_message(str(message.content))
 
         raise RuntimeError("Graph execution failed: no valid AI response generated")
 
-    async def ainvoke(self, context: RequestContext) -> Message:
+    async def ainvoke(self, context: RequestContext) -> Message | TaskResponse:
         # Extract user input from context
         user_input = context.get_user_input()
 
@@ -274,16 +379,28 @@ class Supervisor(Agent):
                 task_id=context.task_id,
             )
 
+        # Use task_id as thread_id for session management
+        # If no task_id, generate a new one
+        thread_id = context.task_id or str(uuid.uuid4())
+
         # Run the agent and get the response
-        response = await self._run_agent(user_input)
+        response = await self._run_agent(user_input, thread_id)
 
-        return new_agent_text_message(
-            response,
-            context_id=context.context_id,
-            task_id=context.task_id,
-        )
+        if isinstance(response, TaskResponse):
+            # Interrupted - add context/task IDs to the message if present
+            if response.status.message:
+                response.status.message.context_id = context.context_id
+                response.status.message.task_id = context.task_id
+            return response
 
-    async def astream(self, context: RequestContext) -> AsyncGenerator[Message, None]:
+        # Regular message response
+        response.context_id = context.context_id
+        response.task_id = context.task_id
+        return response
+
+    async def astream(
+        self, context: RequestContext
+    ) -> AsyncGenerator[Message | TaskResponse, None]:
         # Extract user input from context
         user_input = context.get_user_input()
 
@@ -295,15 +412,25 @@ class Supervisor(Agent):
             )
             return
 
+        # Use task_id as thread_id for session management
+        thread_id = context.task_id or str(uuid.uuid4())
+
         # For streaming, we run the graph and yield the final response
         # (Full streaming of intermediate steps could be implemented with stream mode)
-        response = await self._run_agent(user_input)
+        response = await self._run_agent(user_input, thread_id)
 
-        yield new_agent_text_message(
-            response,
-            context_id=context.context_id,
-            task_id=context.task_id,
-        )
+        if isinstance(response, TaskResponse):
+            # Interrupted - add context/task IDs to the message if present
+            if response.status.message:
+                response.status.message.context_id = context.context_id
+                response.status.message.task_id = context.task_id
+            yield response
+            return
+
+        # Regular message response
+        response.context_id = context.context_id
+        response.task_id = context.task_id
+        yield response
 
     async def acancel(self, context: RequestContext) -> None:
         # Cancel is a no-op for now
