@@ -140,7 +140,7 @@ def extract_agent_state(response: dict[str, Any]) -> dict[str, Any] | None:
         result = response.get("result", {})
         artifacts = result.get("artifacts", [])
 
-        for artifact in artifacts:
+        for artifact in reversed(artifacts):
             if artifact.get("name") == "Agent State":
                 parts = artifact.get("parts", [])
                 for part in parts:
