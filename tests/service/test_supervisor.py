@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from a2a.server.agent_execution.context import RequestContext
-from a2a.types import Message, TransportProtocol
+from a2a.types import DataPart, Message, TransportProtocol
 from langgraph.prebuilt.tool_node import ToolRuntime
 from langgraph.types import Command
 
@@ -425,6 +425,7 @@ class TestCreateStateArtifact:
 
         part = artifact.parts[0]
         data_part = part.root
+        assert isinstance(data_part, DataPart)
         assert "data" in data_part.data
         assert data_part.data["data"]["key"] == "value"
         assert data_part.data["data"]["number"] == 42
@@ -446,6 +447,7 @@ class TestCreateStateArtifact:
 
         part = artifact.parts[0]
         data_part = part.root
+        assert isinstance(data_part, DataPart)
         assert len(data_part.data["messages"]) == 1
         msg_data = data_part.data["messages"][0]
         # model_dump uses lowercase 'type' value
@@ -465,6 +467,7 @@ class TestCreateStateArtifact:
 
         part = artifact.parts[0]
         data_part = part.root
+        assert isinstance(data_part, DataPart)
         msg_data = data_part.data["messages"][0]
         # model_dump uses lowercase 'type' value
         assert msg_data["type"] == "tool"
@@ -486,6 +489,7 @@ class TestCreateStateArtifact:
 
         part = artifact.parts[0]
         data_part = part.root
+        assert isinstance(data_part, DataPart)
         msg_data = data_part.data["messages"][0]
         # model_dump preserves additional fields like id and response_metadata
         assert msg_data["id"] == "msg-123"
