@@ -387,12 +387,12 @@ class TestJsonpatchUpdate:
     def _create_mock_runtime(self, tool_call_id: str = "test-call-id") -> ToolRuntime:
         """Create a mock ToolRuntime for testing."""
         return ToolRuntime(
-            state=None,
+            state={},
             tool_call_id=tool_call_id,
             config={},
             context=None,
             store=None,
-            stream_writer=None,
+            stream_writer=lambda _: None,
         )
 
     def test_add_field(self) -> None:
