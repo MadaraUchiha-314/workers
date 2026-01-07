@@ -16,18 +16,34 @@ from a2a.types import (
 )
 from a2a.utils.message import new_agent_text_message
 from jsonpath_ng import parse as jsonpath_parse
-from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage
+from langchain_core.messages import (
+    AIMessage,
+    AnyMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
-from langgraph.prebuilt.tool_node import InjectedState
+from langgraph.prebuilt.tool_node import InjectedState, ToolRuntime
 from langgraph.types import Command, Interrupt, interrupt
 from pydantic import BaseModel, ConfigDict, SecretStr
 
 from workers.framework.agent.agent import Agent, Message, RequestContext, TaskResponse
+
+
+# State definition for the graph - must be defined before tools that use it
+class AgentState(BaseModel):
+    """Pydantic model for the agent state."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    messages: Annotated[list[AnyMessage], add_messages] = []
+    data: dict[str, Any] = {}
 
 
 def load_system_prompt() -> str:
@@ -64,7 +80,7 @@ def calculate(expression: str) -> str:
 
 
 @tool(parse_docstring=True)
-def jsonpath_query(path: str, state: Annotated[dict[str, Any], InjectedState]) -> str:
+def jsonpath_query(path: str, state: Annotated[AgentState, InjectedState]) -> str:
     """Query the agent's data store using JSONPath expressions.
 
     Use this tool to retrieve specific values from the agent's structured data.
@@ -81,7 +97,7 @@ def jsonpath_query(path: str, state: Annotated[dict[str, Any], InjectedState]) -
         - "$..id" - Get all 'id' fields recursively
     """
     try:
-        data = state.get("data", {})
+        data = state.data
         jsonpath_expr = jsonpath_parse(path)
         matches = jsonpath_expr.find(data)
 
@@ -101,7 +117,9 @@ def jsonpath_query(path: str, state: Annotated[dict[str, Any], InjectedState]) -
 
 @tool(parse_docstring=True)
 def jsonpatch_update(
-    patch: str, state: Annotated[dict[str, Any], InjectedState]
+    patch: str,
+    state: Annotated[AgentState, InjectedState],
+    runtime: ToolRuntime,
 ) -> Command:
     """Modify the agent's data store using JSON Patch operations.
 
@@ -123,30 +141,23 @@ def jsonpatch_update(
         patch_doc = json.loads(patch)
 
         # Get current data from state
-        current_data = state.get("data", {})
+        current_data = state.data
 
         # Apply the patch
         new_data = jsonpatch.apply_patch(current_data, patch_doc)
 
-        # Return a Command to update the state
-        return Command(update={"data": new_data})
+        # Return a Command to update the state with a ToolMessage
+        tool_message = ToolMessage(
+            content=f"Successfully applied patch. New data: {json.dumps(new_data)}",
+            tool_call_id=runtime.tool_call_id,
+        )
+        return Command(update={"data": new_data, "messages": [tool_message]})
     except json.JSONDecodeError as e:
-        # Return command with unchanged data and error message will be in tool output
         raise ValueError(f"Invalid JSON in patch document: {e}") from e
     except jsonpatch.JsonPatchException as e:
         raise ValueError(f"JSON Patch error: {e}") from e
     except Exception as e:
         raise ValueError(f"Error applying patch: {e}") from e
-
-
-# State definition for the graph
-class AgentState(BaseModel):
-    """Pydantic model for the agent state."""
-
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    messages: Annotated[list[AnyMessage], add_messages] = []
-    data: dict[str, Any] = {}
 
 
 class Supervisor(Agent):
