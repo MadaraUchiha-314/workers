@@ -9,13 +9,15 @@ from fastapi import FastAPI
 from workers.framework.a2a.executor import A2AExecutor
 from workers.framework.agent.agent import Agent
 from workers.service.agents.supervisor.supervisor import Supervisor
+from workers.service.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
 
 def configure_logging():
+    settings = get_settings()
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, settings.log_level.upper(), logging.INFO),
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[logging.StreamHandler(sys.stdout)],
     )
@@ -23,12 +25,21 @@ def configure_logging():
 
 def create_app() -> FastAPI:
     configure_logging()
-    logger.info("Creating A2A REST FastAPI application")
+    settings = get_settings()
+    logger.info(
+        "Creating A2A REST FastAPI application (environment: %s)",
+        settings.environment,
+    )
     # Initialize main FastAPI app
     main_app = FastAPI()
-    # Initialize agents
+    # Initialize agents with settings
     agents: list[Agent] = [
-        Supervisor(rpc_url="/"),
+        Supervisor(
+            rpc_url="/",
+            api_key=settings.llm_api_key,
+            base_url=settings.llm_base_url,
+            model=settings.llm_model,
+        ),
     ]
     for agent in agents:
         # Create an instance of A2ARESTFastAPIApplication
