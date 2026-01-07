@@ -10,6 +10,9 @@ from a2a.types import (
     AgentCapabilities,
     AgentCard,
     AgentSkill,
+    Artifact,
+    DataPart,
+    Part,
     TaskState,
     TaskStatus,
     TransportProtocol,
@@ -292,6 +295,30 @@ class Supervisor(Agent):
         checkpointer = MemorySaver()
         return graph_builder.compile(checkpointer=checkpointer)
 
+    def _create_state_artifact(self, state: AgentState) -> Artifact:
+        """Create an artifact containing the JSON dump of the agent state.
+
+        Args:
+            state: The current agent state.
+
+        Returns:
+            An Artifact containing the serialized state as a DataPart.
+        """
+        # Serialize messages using model_dump for complete serialization
+        messages_data = [msg.model_dump() for msg in state.messages]
+
+        state_dict = {
+            "messages": messages_data,
+            "data": state.data,
+        }
+
+        return Artifact(
+            artifact_id=f"agent-state-{uuid.uuid4()}",
+            name="Agent State",
+            description="JSON dump of the entire agent state including messages and data",
+            parts=[Part(root=DataPart(data=state_dict))],
+        )
+
     def _validate_interrupt_state(self, interrupts: tuple[Interrupt, ...]) -> AIMessage:
         """Validate interrupt state and return the interrupt message.
 
@@ -324,7 +351,7 @@ class Supervisor(Agent):
 
     async def _run_agent(
         self, user_input: str | Command, thread_id: str
-    ) -> Message | TaskResponse:
+    ) -> TaskResponse:
         """Run the agent with user input and return the response.
 
         Args:
@@ -332,7 +359,7 @@ class Supervisor(Agent):
             thread_id: The thread ID for maintaining session state.
 
         Returns:
-            Either a Message (when interrupted) or TaskResponse (completed/interrupted).
+            TaskResponse containing status and agent state artifact.
         """
         # Run the graph (lazy initialization)
         graph = self._get_graph()
@@ -350,6 +377,15 @@ class Supervisor(Agent):
         # Run the graph
         result = await graph.ainvoke(graph_input, config)
 
+        # Build AgentState from the result for the artifact
+        agent_state = AgentState(
+            messages=result.get("messages", []),
+            data=result.get("data", {}),
+        )
+
+        # Create the state artifact
+        state_artifact = self._create_state_artifact(agent_state)
+
         # Check for interrupts in the state
         state = await graph.aget_state(config)
         if state.tasks and any(task.interrupts for task in state.tasks):
@@ -364,19 +400,27 @@ class Supervisor(Agent):
             # Convert AIMessage to A2A Message for the response
             interrupt_message = new_agent_text_message(str(ai_message.content))
 
-            # Return TaskResponse with input_required status
+            # Return TaskResponse with input_required status and state artifact
             return TaskResponse(
                 status=TaskStatus(
                     state=TaskState.input_required,
                     message=interrupt_message,
-                )
+                ),
+                artifacts=[state_artifact],
             )
 
         # Extract the final AI message
         messages = result["messages"]
         for message in reversed(messages):
             if isinstance(message, AIMessage) and message.content:
-                return new_agent_text_message(str(message.content))
+                response_message = new_agent_text_message(str(message.content))
+                return TaskResponse(
+                    status=TaskStatus(
+                        state=TaskState.completed,
+                        message=response_message,
+                    ),
+                    artifacts=[state_artifact],
+                )
 
         raise RuntimeError("Graph execution failed: no valid AI response generated")
 
@@ -395,19 +439,14 @@ class Supervisor(Agent):
         # If no task_id, generate a new one
         thread_id = context.task_id or str(uuid.uuid4())
 
-        # Run the agent and get the response
+        # Run the agent and get the response (always returns TaskResponse)
         response = await self._run_agent(user_input, thread_id)
 
-        if isinstance(response, TaskResponse):
-            # Interrupted - add context/task IDs to the message if present
-            if response.status.message:
-                response.status.message.context_id = context.context_id
-                response.status.message.task_id = context.task_id
-            return response
+        # Add context/task IDs to the message if present
+        if response.status.message:
+            response.status.message.context_id = context.context_id
+            response.status.message.task_id = context.task_id
 
-        # Regular message response
-        response.context_id = context.context_id
-        response.task_id = context.task_id
         return response
 
     async def astream(
@@ -431,17 +470,11 @@ class Supervisor(Agent):
         # (Full streaming of intermediate steps could be implemented with stream mode)
         response = await self._run_agent(user_input, thread_id)
 
-        if isinstance(response, TaskResponse):
-            # Interrupted - add context/task IDs to the message if present
-            if response.status.message:
-                response.status.message.context_id = context.context_id
-                response.status.message.task_id = context.task_id
-            yield response
-            return
+        # Add context/task IDs to the message if present
+        if response.status.message:
+            response.status.message.context_id = context.context_id
+            response.status.message.task_id = context.task_id
 
-        # Regular message response
-        response.context_id = context.context_id
-        response.task_id = context.task_id
         yield response
 
     async def acancel(self, context: RequestContext) -> None:

@@ -8,9 +8,11 @@ import uuid
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from a2a.types import Artifact, DataPart, Part, TaskState, TaskStatus
 from a2a.utils.message import new_agent_text_message
 from fastapi.testclient import TestClient
 
+from workers.framework.agent.agent import TaskResponse
 from workers.service.app import create_app
 
 
@@ -21,9 +23,21 @@ def mock_agent_run():
         "workers.service.agents.supervisor.supervisor.Supervisor._run_agent",
         new_callable=AsyncMock,
     ) as mock:
-        # Return a Message object instead of string since _run_agent now returns
-        # Message | TaskResponse
-        mock.return_value = new_agent_text_message("Hello! I'm a helpful AI assistant.")
+        # Return a TaskResponse since _run_agent now always returns TaskResponse
+        mock.return_value = TaskResponse(
+            status=TaskStatus(
+                state=TaskState.completed,
+                message=new_agent_text_message("Hello! I'm a helpful AI assistant."),
+            ),
+            artifacts=[
+                Artifact(
+                    artifact_id="test-artifact-id",
+                    name="Agent State",
+                    description="Test agent state",
+                    parts=[Part(root=DataPart(data={"messages": [], "data": {}}))],
+                )
+            ],
+        )
         yield mock
 
 

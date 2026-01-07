@@ -381,6 +381,117 @@ class TestJsonpathQuery:
         assert "Error" in result
 
 
+class TestCreateStateArtifact:
+    """Tests for _create_state_artifact method."""
+
+    def test_creates_artifact_with_empty_state(self) -> None:
+        """Test that an artifact is created with empty state."""
+        supervisor = Supervisor(rpc_url="/test")
+        state = AgentState()
+
+        artifact = supervisor._create_state_artifact(state)
+
+        assert artifact is not None
+        assert artifact.artifact_id.startswith("agent-state-")
+        assert artifact.name == "Agent State"
+        assert artifact.description is not None
+        assert len(artifact.parts) == 1
+
+    def test_artifact_contains_messages_data(self) -> None:
+        """Test that the artifact contains messages in the data via model_dump."""
+        from langchain_core.messages import HumanMessage
+
+        supervisor = Supervisor(rpc_url="/test")
+        state = AgentState(messages=[HumanMessage(content="Hello")])
+
+        artifact = supervisor._create_state_artifact(state)
+
+        # Extract the data from the artifact
+        part = artifact.parts[0]
+        data_part = part.root
+        assert data_part.kind == "data"
+        assert "messages" in data_part.data
+        assert len(data_part.data["messages"]) == 1
+        # model_dump includes 'type' and 'content' fields
+        assert data_part.data["messages"][0]["type"] == "human"
+        assert data_part.data["messages"][0]["content"] == "Hello"
+
+    def test_artifact_contains_state_data(self) -> None:
+        """Test that the artifact contains the state data."""
+        supervisor = Supervisor(rpc_url="/test")
+        state = AgentState(data={"key": "value", "number": 42})
+
+        artifact = supervisor._create_state_artifact(state)
+
+        part = artifact.parts[0]
+        data_part = part.root
+        assert "data" in data_part.data
+        assert data_part.data["data"]["key"] == "value"
+        assert data_part.data["data"]["number"] == 42
+
+    def test_artifact_includes_tool_calls_for_ai_messages(self) -> None:
+        """Test that tool calls are included for AI messages via model_dump."""
+        from langchain_core.messages import AIMessage
+
+        supervisor = Supervisor(rpc_url="/test")
+        ai_message = AIMessage(
+            content="I'll calculate that",
+            tool_calls=[
+                {"id": "call_123", "name": "calculate", "args": {"expression": "2+2"}}
+            ],
+        )
+        state = AgentState(messages=[ai_message])
+
+        artifact = supervisor._create_state_artifact(state)
+
+        part = artifact.parts[0]
+        data_part = part.root
+        assert len(data_part.data["messages"]) == 1
+        msg_data = data_part.data["messages"][0]
+        # model_dump uses lowercase 'type' value
+        assert msg_data["type"] == "ai"
+        assert "tool_calls" in msg_data
+        assert msg_data["tool_calls"][0]["name"] == "calculate"
+
+    def test_artifact_includes_tool_call_id_for_tool_messages(self) -> None:
+        """Test that tool_call_id is included for tool messages via model_dump."""
+        from langchain_core.messages import ToolMessage
+
+        supervisor = Supervisor(rpc_url="/test")
+        tool_message = ToolMessage(content="4", tool_call_id="call_123")
+        state = AgentState(messages=[tool_message])
+
+        artifact = supervisor._create_state_artifact(state)
+
+        part = artifact.parts[0]
+        data_part = part.root
+        msg_data = data_part.data["messages"][0]
+        # model_dump uses lowercase 'type' value
+        assert msg_data["type"] == "tool"
+        assert msg_data["tool_call_id"] == "call_123"
+
+    def test_artifact_uses_model_dump_for_complete_serialization(self) -> None:
+        """Test that model_dump is used, preserving all message fields."""
+        from langchain_core.messages import AIMessage
+
+        supervisor = Supervisor(rpc_url="/test")
+        ai_message = AIMessage(
+            content="Test",
+            id="msg-123",
+            response_metadata={"model": "test-model"},
+        )
+        state = AgentState(messages=[ai_message])
+
+        artifact = supervisor._create_state_artifact(state)
+
+        part = artifact.parts[0]
+        data_part = part.root
+        msg_data = data_part.data["messages"][0]
+        # model_dump preserves additional fields like id and response_metadata
+        assert msg_data["id"] == "msg-123"
+        assert msg_data["response_metadata"]["model"] == "test-model"
+
+
 class TestJsonpatchUpdate:
     """Tests for jsonpatch_update tool."""
 
