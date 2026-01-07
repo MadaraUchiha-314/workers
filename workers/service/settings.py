@@ -21,7 +21,7 @@ def _get_project_root() -> Path:
     return Path(__file__).parent.parent.parent
 
 
-def _load_secrets() -> dict:
+def _load_secrets() -> dict[str, str]:
     """Load secrets from secrets.json file.
 
     Returns:
@@ -30,7 +30,8 @@ def _load_secrets() -> dict:
     secrets_path = _get_project_root() / "secrets.json"
     if secrets_path.exists():
         with secrets_path.open() as f:
-            return json.load(f)
+            result: dict[str, str] = json.load(f)
+            return result
     logger.warning("secrets.json not found at %s", secrets_path)
     return {}
 

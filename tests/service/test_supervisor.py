@@ -15,39 +15,69 @@ from workers.service.agents.supervisor.supervisor import (
     jsonpath_query,
 )
 
+# Default test values for Supervisor constructor
+TEST_API_KEY = "test-api-key"
+TEST_BASE_URL = "http://localhost:11434/v1"
+TEST_MODEL = "test-model"
+
 
 class TestSupervisorInitialization:
     """Tests for Supervisor initialization."""
 
     def test_supervisor_initializes_with_rpc_url(self) -> None:
         """Test that Supervisor initializes correctly with an RPC URL."""
-        supervisor = Supervisor(rpc_url="/supervisor")
+        supervisor = Supervisor(
+            rpc_url="/supervisor",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         assert supervisor.id == "supervisor"
         assert supervisor.agent_card.url == "/supervisor"
 
     def test_supervisor_has_correct_id(self) -> None:
         """Test that Supervisor has the correct ID."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         assert supervisor.id == "supervisor"
 
     def test_supervisor_agent_card_name(self) -> None:
         """Test that Supervisor has the correct agent card name."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         assert supervisor.agent_card.name == "Supervisor"
 
     def test_supervisor_agent_card_description(self) -> None:
         """Test that Supervisor has the correct agent card description."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         assert "supervisor" in supervisor.agent_card.description.lower()
         assert "oversee" in supervisor.agent_card.description.lower()
 
     def test_supervisor_agent_card_version(self) -> None:
         """Test that Supervisor has the correct version."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         assert supervisor.agent_card.version == "1.0.0"
 
@@ -57,25 +87,45 @@ class TestSupervisorCapabilities:
 
     def test_supervisor_supports_streaming(self) -> None:
         """Test that Supervisor supports streaming."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         assert supervisor.agent_card.capabilities.streaming is True
 
     def test_supervisor_does_not_support_push_notifications(self) -> None:
         """Test that Supervisor does not support push notifications."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         assert supervisor.agent_card.capabilities.push_notifications is False
 
     def test_supervisor_does_not_support_state_transition_history(self) -> None:
         """Test that Supervisor does not support state transition history."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         assert supervisor.agent_card.capabilities.state_transition_history is False
 
     def test_supervisor_uses_jsonrpc_transport(self) -> None:
         """Test that Supervisor uses JSON-RPC transport."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         assert supervisor.agent_card.preferred_transport == TransportProtocol.jsonrpc
 
@@ -85,13 +135,23 @@ class TestSupervisorInputOutputModes:
 
     def test_supervisor_accepts_text_plain_input(self) -> None:
         """Test that Supervisor accepts text/plain input."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         assert "text/plain" in supervisor.agent_card.default_input_modes
 
     def test_supervisor_outputs_text_plain(self) -> None:
         """Test that Supervisor outputs text/plain."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         assert "text/plain" in supervisor.agent_card.default_output_modes
 
@@ -101,14 +161,24 @@ class TestSupervisorSkills:
 
     def test_supervisor_has_chat_skill(self) -> None:
         """Test that Supervisor has a chat skill."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         skill_ids = [skill.id for skill in supervisor.agent_card.skills]
         assert "chat" in skill_ids
 
     def test_supervisor_chat_skill_has_correct_name(self) -> None:
         """Test that chat skill has the correct name."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         chat_skill = next(
             skill for skill in supervisor.agent_card.skills if skill.id == "chat"
@@ -117,7 +187,12 @@ class TestSupervisorSkills:
 
     def test_supervisor_chat_skill_has_correct_tags(self) -> None:
         """Test that chat skill has the correct tags."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         chat_skill = next(
             skill for skill in supervisor.agent_card.skills if skill.id == "chat"
@@ -132,7 +207,12 @@ class TestSupervisorAinvoke:
     @pytest.mark.asyncio
     async def test_ainvoke_returns_message(self) -> None:
         """Test that ainvoke returns a Message when no user input is provided."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "test-context"
@@ -146,7 +226,12 @@ class TestSupervisorAinvoke:
     @pytest.mark.asyncio
     async def test_ainvoke_returns_greeting_message(self) -> None:
         """Test that ainvoke returns a greeting message when no user input."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "test-context"
@@ -165,7 +250,12 @@ class TestSupervisorAinvoke:
     @pytest.mark.asyncio
     async def test_ainvoke_uses_context_id(self) -> None:
         """Test that ainvoke uses the context_id from the request context."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "my-context-123"
@@ -180,7 +270,12 @@ class TestSupervisorAinvoke:
     @pytest.mark.asyncio
     async def test_ainvoke_uses_task_id(self) -> None:
         """Test that ainvoke uses the task_id from the request context."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "my-context-123"
@@ -199,7 +294,12 @@ class TestSupervisorAstream:
     @pytest.mark.asyncio
     async def test_astream_yields_messages(self) -> None:
         """Test that astream yields messages when no user input is provided."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "test-context"
@@ -216,7 +316,12 @@ class TestSupervisorAstream:
     @pytest.mark.asyncio
     async def test_astream_yields_greeting_message(self) -> None:
         """Test that astream yields a greeting message when no user input."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "test-context"
@@ -236,7 +341,12 @@ class TestSupervisorAstream:
     @pytest.mark.asyncio
     async def test_astream_uses_context_id(self) -> None:
         """Test that astream uses the context_id from the request context."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "stream-context-123"
@@ -256,7 +366,12 @@ class TestSupervisorAstream:
     @pytest.mark.asyncio
     async def test_astream_uses_task_id(self) -> None:
         """Test that astream uses the task_id from the request context."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "stream-context-123"
@@ -280,7 +395,12 @@ class TestSupervisorAcancel:
     @pytest.mark.asyncio
     async def test_acancel_does_not_raise(self) -> None:
         """Test that acancel does not raise an exception."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "test-context"
@@ -292,7 +412,12 @@ class TestSupervisorAcancel:
     @pytest.mark.asyncio
     async def test_acancel_returns_none(self) -> None:
         """Test that acancel returns None (void function)."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
 
         context = MagicMock(spec=RequestContext)
         context.context_id = "test-context"
@@ -386,7 +511,12 @@ class TestCreateStateArtifact:
 
     def test_creates_artifact_with_empty_state(self) -> None:
         """Test that an artifact is created with empty state."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
         state = AgentState()
 
         artifact = supervisor._create_state_artifact(state)
@@ -401,7 +531,12 @@ class TestCreateStateArtifact:
         """Test that the artifact contains messages in the data via model_dump."""
         from langchain_core.messages import HumanMessage
 
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
         state = AgentState(messages=[HumanMessage(content="Hello")])
 
         artifact = supervisor._create_state_artifact(state)
@@ -418,7 +553,12 @@ class TestCreateStateArtifact:
 
     def test_artifact_contains_state_data(self) -> None:
         """Test that the artifact contains the state data."""
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
         state = AgentState(data={"key": "value", "number": 42})
 
         artifact = supervisor._create_state_artifact(state)
@@ -434,7 +574,12 @@ class TestCreateStateArtifact:
         """Test that tool calls are included for AI messages via model_dump."""
         from langchain_core.messages import AIMessage
 
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
         ai_message = AIMessage(
             content="I'll calculate that",
             tool_calls=[
@@ -459,7 +604,12 @@ class TestCreateStateArtifact:
         """Test that tool_call_id is included for tool messages via model_dump."""
         from langchain_core.messages import ToolMessage
 
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
         tool_message = ToolMessage(content="4", tool_call_id="call_123")
         state = AgentState(messages=[tool_message])
 
@@ -477,7 +627,12 @@ class TestCreateStateArtifact:
         """Test that model_dump is used, preserving all message fields."""
         from langchain_core.messages import AIMessage
 
-        supervisor = Supervisor(rpc_url="/test")
+        supervisor = Supervisor(
+            rpc_url="/test",
+            api_key=TEST_API_KEY,
+            base_url=TEST_BASE_URL,
+            model=TEST_MODEL,
+        )
         ai_message = AIMessage(
             content="Test",
             id="msg-123",
