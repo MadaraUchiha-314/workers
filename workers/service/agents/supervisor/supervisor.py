@@ -164,8 +164,17 @@ def jsonpatch_update(
 
 
 class Supervisor(Agent):
-    def __init__(self, rpc_url: str):
+    def __init__(
+        self,
+        rpc_url: str,
+        api_key: str,
+        base_url: str,
+        model: str,
+    ):
         self.id = "supervisor"
+        self._api_key = api_key
+        self._base_url = base_url
+        self._model = model
         self.agent_card = AgentCard(
             name="Supervisor",
             description="A supervisor agent that can oversee the execution of other agents",
@@ -211,9 +220,9 @@ class Supervisor(Agent):
         """Build the LangGraph ReAct agent graph."""
         # Initialize the LLM with tools bound
         llm = ChatOpenAI(
-            model="gpt-oss:20b",
-            base_url="http://localhost:11434/v1",
-            api_key=SecretStr("ollama"),  # required but ignored
+            model=self._model,
+            base_url=self._base_url,
+            api_key=SecretStr(self._api_key),
         )
         llm_with_tools = llm.bind_tools(self._tools)
 
