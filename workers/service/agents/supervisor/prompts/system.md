@@ -37,9 +37,10 @@ You are a supervisor agent designed to:
 
 ## State Schema
 
-```py
-class AgentState(BaseModel):
-    human_requested_count: int
+```json
+{
+    "human_requested_count": 0
+}
 ```
 
 ## Current State
