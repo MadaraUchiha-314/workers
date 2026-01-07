@@ -5,9 +5,11 @@ from unittest.mock import MagicMock
 import pytest
 from a2a.server.agent_execution.context import RequestContext
 from a2a.types import Message, TransportProtocol
+from langgraph.prebuilt.tool_node import ToolRuntime
 from langgraph.types import Command
 
 from workers.service.agents.supervisor.supervisor import (
+    AgentState,
     Supervisor,
     jsonpatch_update,
     jsonpath_query,
@@ -306,7 +308,7 @@ class TestJsonpathQuery:
 
     def test_query_simple_field(self) -> None:
         """Test querying a simple field from data."""
-        state = {"data": {"name": "John", "age": 30}}
+        state = AgentState(data={"name": "John", "age": 30})
 
         result = jsonpath_query.invoke({"path": "$.name", "state": state})
 
@@ -314,7 +316,7 @@ class TestJsonpathQuery:
 
     def test_query_nested_field(self) -> None:
         """Test querying a nested field from data."""
-        state = {"data": {"user": {"profile": {"email": "john@example.com"}}}}
+        state = AgentState(data={"user": {"profile": {"email": "john@example.com"}}})
 
         result = jsonpath_query.invoke({"path": "$.user.profile.email", "state": state})
 
@@ -322,7 +324,7 @@ class TestJsonpathQuery:
 
     def test_query_array_element(self) -> None:
         """Test querying an array element from data."""
-        state = {"data": {"items": ["apple", "banana", "cherry"]}}
+        state = AgentState(data={"items": ["apple", "banana", "cherry"]})
 
         result = jsonpath_query.invoke({"path": "$.items[0]", "state": state})
 
@@ -330,7 +332,7 @@ class TestJsonpathQuery:
 
     def test_query_all_array_elements(self) -> None:
         """Test querying all array elements from data."""
-        state = {"data": {"items": ["a", "b", "c"]}}
+        state = AgentState(data={"items": ["a", "b", "c"]})
 
         result = jsonpath_query.invoke({"path": "$.items[*]", "state": state})
 
@@ -338,7 +340,7 @@ class TestJsonpathQuery:
 
     def test_query_recursive_descent(self) -> None:
         """Test querying using recursive descent."""
-        state = {"data": {"users": [{"id": 1}, {"id": 2}], "nested": {"id": 3}}}
+        state = AgentState(data={"users": [{"id": 1}, {"id": 2}], "nested": {"id": 3}})
 
         result = jsonpath_query.invoke({"path": "$..id", "state": state})
 
@@ -348,7 +350,7 @@ class TestJsonpathQuery:
 
     def test_query_no_match(self) -> None:
         """Test querying when no match is found."""
-        state = {"data": {"name": "John"}}
+        state = AgentState(data={"name": "John"})
 
         result = jsonpath_query.invoke({"path": "$.nonexistent", "state": state})
 
@@ -356,15 +358,15 @@ class TestJsonpathQuery:
 
     def test_query_empty_data(self) -> None:
         """Test querying when data is empty."""
-        state: dict[str, dict] = {"data": {}}
+        state = AgentState(data={})
 
         result = jsonpath_query.invoke({"path": "$.name", "state": state})
 
         assert "No matches found" in result
 
     def test_query_missing_data_key(self) -> None:
-        """Test querying when data key is missing from state."""
-        state: dict = {}
+        """Test querying when data key is missing from state (uses default empty dict)."""
+        state = AgentState()
 
         result = jsonpath_query.invoke({"path": "$.name", "state": state})
 
@@ -372,7 +374,7 @@ class TestJsonpathQuery:
 
     def test_query_invalid_jsonpath(self) -> None:
         """Test querying with an invalid JSONPath expression."""
-        state = {"data": {"name": "John"}}
+        state = AgentState(data={"name": "John"})
 
         result = jsonpath_query.invoke({"path": "invalid[[jsonpath", "state": state})
 
@@ -382,14 +384,27 @@ class TestJsonpathQuery:
 class TestJsonpatchUpdate:
     """Tests for jsonpatch_update tool."""
 
+    def _create_mock_runtime(self, tool_call_id: str = "test-call-id") -> ToolRuntime:
+        """Create a mock ToolRuntime for testing."""
+        return ToolRuntime(
+            state=None,
+            tool_call_id=tool_call_id,
+            config={},
+            context=None,
+            store=None,
+            stream_writer=None,
+        )
+
     def test_add_field(self) -> None:
         """Test adding a new field to data."""
-        state: dict[str, dict] = {"data": {}}
+        state = AgentState(data={})
+        runtime = self._create_mock_runtime()
 
         result = jsonpatch_update.invoke(
             {
                 "patch": '[{"op": "add", "path": "/name", "value": "John"}]',
                 "state": state,
+                "runtime": runtime,
             }
         )
 
@@ -399,12 +414,14 @@ class TestJsonpatchUpdate:
 
     def test_replace_field(self) -> None:
         """Test replacing an existing field in data."""
-        state = {"data": {"name": "John"}}
+        state = AgentState(data={"name": "John"})
+        runtime = self._create_mock_runtime()
 
         result = jsonpatch_update.invoke(
             {
                 "patch": '[{"op": "replace", "path": "/name", "value": "Jane"}]',
                 "state": state,
+                "runtime": runtime,
             }
         )
 
@@ -414,10 +431,15 @@ class TestJsonpatchUpdate:
 
     def test_remove_field(self) -> None:
         """Test removing a field from data."""
-        state = {"data": {"name": "John", "age": 30}}
+        state = AgentState(data={"name": "John", "age": 30})
+        runtime = self._create_mock_runtime()
 
         result = jsonpatch_update.invoke(
-            {"patch": '[{"op": "remove", "path": "/age"}]', "state": state}
+            {
+                "patch": '[{"op": "remove", "path": "/age"}]',
+                "state": state,
+                "runtime": runtime,
+            }
         )
 
         assert isinstance(result, Command)
@@ -427,12 +449,14 @@ class TestJsonpatchUpdate:
 
     def test_add_nested_field(self) -> None:
         """Test adding a nested field to data."""
-        state: dict[str, dict] = {"data": {"user": {}}}
+        state = AgentState(data={"user": {}})
+        runtime = self._create_mock_runtime()
 
         result = jsonpatch_update.invoke(
             {
                 "patch": '[{"op": "add", "path": "/user/email", "value": "test@example.com"}]',
                 "state": state,
+                "runtime": runtime,
             }
         )
 
@@ -442,12 +466,14 @@ class TestJsonpatchUpdate:
 
     def test_add_to_array(self) -> None:
         """Test appending to an array."""
-        state = {"data": {"items": ["a", "b"]}}
+        state = AgentState(data={"items": ["a", "b"]})
+        runtime = self._create_mock_runtime()
 
         result = jsonpatch_update.invoke(
             {
                 "patch": '[{"op": "add", "path": "/items/-", "value": "c"}]',
                 "state": state,
+                "runtime": runtime,
             }
         )
 
@@ -457,12 +483,14 @@ class TestJsonpatchUpdate:
 
     def test_multiple_operations(self) -> None:
         """Test applying multiple patch operations."""
-        state = {"data": {"a": 1}}
+        state = AgentState(data={"a": 1})
+        runtime = self._create_mock_runtime()
 
         result = jsonpatch_update.invoke(
             {
                 "patch": '[{"op": "add", "path": "/b", "value": 2}, {"op": "add", "path": "/c", "value": 3}]',
                 "state": state,
+                "runtime": runtime,
             }
         )
 
@@ -474,12 +502,14 @@ class TestJsonpatchUpdate:
 
     def test_move_field(self) -> None:
         """Test moving a field."""
-        state = {"data": {"old_name": "value"}}
+        state = AgentState(data={"old_name": "value"})
+        runtime = self._create_mock_runtime()
 
         result = jsonpatch_update.invoke(
             {
                 "patch": '[{"op": "move", "from": "/old_name", "path": "/new_name"}]',
                 "state": state,
+                "runtime": runtime,
             }
         )
 
@@ -490,12 +520,14 @@ class TestJsonpatchUpdate:
 
     def test_copy_field(self) -> None:
         """Test copying a field."""
-        state = {"data": {"source": "value"}}
+        state = AgentState(data={"source": "value"})
+        runtime = self._create_mock_runtime()
 
         result = jsonpatch_update.invoke(
             {
                 "patch": '[{"op": "copy", "from": "/source", "path": "/target"}]',
                 "state": state,
+                "runtime": runtime,
             }
         )
 
@@ -506,35 +538,42 @@ class TestJsonpatchUpdate:
 
     def test_invalid_json_patch(self) -> None:
         """Test with invalid JSON in patch document."""
-        state: dict[str, dict] = {"data": {}}
+        state = AgentState(data={})
+        runtime = self._create_mock_runtime()
 
         with pytest.raises(ValueError) as exc_info:
-            jsonpatch_update.invoke({"patch": "not valid json", "state": state})
+            jsonpatch_update.invoke(
+                {"patch": "not valid json", "state": state, "runtime": runtime}
+            )
 
         assert "Invalid JSON" in str(exc_info.value)
 
     def test_invalid_patch_operation(self) -> None:
         """Test with invalid patch operation."""
-        state: dict[str, dict] = {"data": {}}
+        state = AgentState(data={})
+        runtime = self._create_mock_runtime()
 
         with pytest.raises(ValueError) as exc_info:
             jsonpatch_update.invoke(
                 {
                     "patch": '[{"op": "remove", "path": "/nonexistent"}]',
                     "state": state,
+                    "runtime": runtime,
                 }
             )
 
         assert "JSON Patch error" in str(exc_info.value)
 
     def test_empty_data_state(self) -> None:
-        """Test applying patch when data key is missing from state."""
-        state: dict = {}
+        """Test applying patch when data key is missing from state (uses default empty dict)."""
+        state = AgentState()
+        runtime = self._create_mock_runtime()
 
         result = jsonpatch_update.invoke(
             {
                 "patch": '[{"op": "add", "path": "/name", "value": "John"}]',
                 "state": state,
+                "runtime": runtime,
             }
         )
 
